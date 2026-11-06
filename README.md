@@ -4,4 +4,4 @@ You can choose a 3x3, 4x4 or 6x6 grid, and if you don’t feel like waving your 
 
 MediaPipe Hands finds the hand landmarks. The rest I wrote myself: pinch detection from the distance between thumb and index finger, smoothing so dragging doesn’t jitter, the shuffle and swap logic, and the leaderboard. Everything runs in your browser, so no video ever leaves your device.
 
-Try it here: your live link:https://kashish995.github.io/live-puzzle/
+Created by **Aryan Singh**.\n\nTry it here: https://rao10311.github.io/live-puzzle/
