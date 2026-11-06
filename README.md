@@ -1,7 +1,18 @@
-I wanted to see how far I could get with hand tracking in the browser without any backend, so I built a puzzle game you play with your hands. You hold both hands up to make a frame, pinch to snap a photo of whatever is inside it, and the picture gets cut into tiles and shuffled. Then you pick tiles up with a pinch and drag them around to swap them back into place. The clock runs the whole time, and your best times go on a leaderboard.
+# Live Puzzle
 
-You can choose a 3x3, 4x4 or 6x6 grid, and if you don’t feel like waving your hands around, the mouse works too.
+A browser-based hand-tracking puzzle game. Raise both hands to frame a picture, pinch to capture it, then solve the shuffled tiles by pinching and dragging.
 
-MediaPipe Hands finds the hand landmarks. The rest I wrote myself: pinch detection from the distance between thumb and index finger, smoothing so dragging doesn’t jitter, the shuffle and swap logic, and the leaderboard. Everything runs in your browser, so no video ever leaves your device.
+## Features
+- Hand tracking with MediaPipe Hands
+- 3x3, 4x4, and 6x6 puzzle grids
+- Timer and local leaderboard
+- Runs in the browser; camera frames are processed locally
 
-Created by **Aryan Singh**.\n\nTry it here: https://rao10311.github.io/live-puzzle/
+## Credits
+Original project created by **Kashish995**. This copy is published in the `RAO10311/live-puzzle` repository with the creator's permission. The original implementation is retained.
+
+- Original repository: https://github.com/Kashish995/live-puzzle
+- Original demo: https://kashish995.github.io/live-puzzle/
+
+## Run
+Open the GitHub Pages site over HTTPS, allow camera access, and follow the on-screen instructions.
