@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Puzzle</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
+<style>
+  :root { --lime:#c6ff2e; --bg:#07060d; --panel:rgba(30,30,24,.82); }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:#fff; font-family:'JetBrains Mono',ui-monospace,monospace;
+         min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:28px 16px; }
+  h1 { color:var(--lime); font-size:22px; letter-spacing:.12em; text-transform:uppercase; }
+  .sub { color:#8d8d99; font-size:12px; margin:8px 0 22px; }
+  #stage { position:relative; width:min(1100px,100%); aspect-ratio:16/9; border-radius:12px; overflow:hidden; background:#111; }
+  canvas { width:100%; height:100%; display:block; }
+  video { display:none; }
+  .pill { position:absolute; background:var(--panel); border-radius:999px; font-size:11px; padding:7px 12px; color:#fff;
+          border:0; cursor:pointer; font-family:inherit; }
+  #lbBtn { top:14px; left:14px; }
+  #lbBtn b { color:var(--lime); margin-right:6px; }
+  #timer { top:14px; left:50%; transform:translateX(-50%); display:none; font-weight:700; }
+  #resetBtn { bottom:14px; left:14px; width:32px; height:32px; padding:0; font-size:15px; }
+  #hint { position:absolute; top:14px; right:14px; background:var(--panel); border-radius:8px; padding:10px 12px;
+          font-size:10px; line-height:1.7; text-align:right; max-width:230px; }
+  #hint .ph { color:var(--lime); font-weight:700; letter-spacing:.06em; margin-bottom:2px; }
+  #status { position:absolute; bottom:14px; right:14px; font-size:10px; color:#ffffffaa; }
+  #done { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.45); }
+  #done .card { text-align:center; background:rgba(15,15,12,.88); padding:26px 34px; border-radius:14px; min-width:280px; }
+  #done .big { color:var(--lime); font-size:22px; font-weight:700; letter-spacing:.1em; }
+  #done .time { font-size:26px; margin:8px 0 16px; }
+  #done form { display:flex; gap:8px; justify-content:center; }
+  #done input { background:#ffffff22; border:1px solid #ffffff33; color:#fff; padding:9px 12px; border-radius:6px;
+                font-family:inherit; width:170px; }
+  #done button, #lb button.close { background:var(--lime); color:#111; border:0; border-radius:6px; padding:9px 14px;
+                font-family:inherit; font-weight:700; cursor:pointer; }
+  #lb { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.6); }
+  #lb .card { background:rgba(15,15,12,.94); padding:22px 28px; border-radius:14px; min-width:300px; max-height:80%; overflow:auto; }
+  #lb h2 { color:var(--lime); font-size:14px; letter-spacing:.12em; margin-bottom:12px; }
+  #lb ol { padding-left:22px; font-size:13px; line-height:2; }
+  #lb ol span { float:right; margin-left:30px; color:var(--lime); }
+  #lb .close { margin-top:14px; }
+  #msg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center;
+         background:#07060dee; font-size:13px; padding:30px; }
+
+         #sizes { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); display:flex; gap:6px; }
+#sizes .pill { position:static; }
+#sizes .pill.on { background:var(--lime); color:#111; font-weight:700; }
+</style>
+</head>
+<body>
+<h1>Live Puzzle</h1>
+<div class="sub">Frame it to Snap. Pinch &amp; Drag to Swap.</div>
+
+<div id="stage">
+  <video id="cam" playsinline muted></video>
+  <canvas id="cv" width="1280" height="720"></canvas>
+
+  <button class="pill" id="lbBtn"><b>&#9776;</b>LEADERBOARD</button>
+  <div class="pill" id="timer">0:00</div>
+  <div id="hint"></div>
+  <button class="pill" id="resetBtn" title="Reset">&#8635;</button>
+  <div id="status"></div>
+
+  <div id="sizes"></div>
+
+  <div id="done"><div class="card">
+    <div class="big">COMPLETE!</div>
+    <div class="time" id="doneTime">0:00</div>
+    <form id="nameForm"><input id="nameIn" maxlength="14" placeholder="YOUR NAME" autocomplete="off"><button>GO</button></form>
+  </div></div>
+
+  <div id="lb"><div class="card">
+    <h2 id="lbTitle">LEADERBOARD</h2><ol id="lbList"></ol>
+    <button class="close">CLOSE</button>
+  </div></div>
+
+  <div id="msg">Starting camera and hand tracking...</div>
+</div>
+
+<script>
+const W = 1280, H = 720;
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const cam = document.getElementById('cam');
+const $ = id => document.getElementById(id);
+const LIME = '#c6ff2e';
+
+// mirrored video frame lives here so we can crop clean snapshots from it
+const vcan = document.createElement('canvas'); vcan.width = W; vcan.height = H;
+const vctx = vcan.getContext('2d');
+
+const BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
+               [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+
+// ---------- game state ----------
+let N = 3;
+const SIZES = [3, 4, 6];
+function buildSizes() {
+  const box = $('sizes'); box.innerHTML = '';
+  SIZES.forEach(s => {
+    const b = document.createElement('button');
+    b.className = 'pill' + (s === N ? ' on' : '');
+    b.textContent = s + 'x' + s;
+    b.onclick = () => { N = s; reset(); buildSizes(); };
+    box.appendChild(b);
+  });
+}
+
+let phase = 'capture';           // capture | play | done
+let snap = null, grid = null;    // snapshot canvas, {x,y,w,h}
+let tiles = [];                  // tiles[pos] = original index
+let drag = null;                 // {pos, val}
+let startTime = 0, elapsed = 0;
+let capHold = 0, lostFrames = 0;
+const pinchState = [false, false];
+let ptr = { x: 0, y: 0 };
+
+const hints = {
+  capture: ['PHASE 1: CAPTURE', '1. Form a frame with two hands', '2. Pinch both hands to SNAP'],
+  play:    ['PHASE 2: SOLVE',   '1. Pinch to pick up a tile', '2. Drag it over another tile', '3. Release to SWAP']
+};
+function setHint(p) {
+  const h = hints[p];
+  $('hint').innerHTML = `<div class="ph">${h[0]}</div>` + h.slice(1).join('<br>');
+}
+
+// ---------- helpers ----------
+const pt = (lm, i) => ({ x: (1 - lm[i].x) * W, y: lm[i].y * H });   // mirrored pixel coords
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+function pinchInfo(lm, idx) {
+  const t = pt(lm, 4), i = pt(lm, 8);
+  const size = dist(pt(lm, 0), pt(lm, 9)) || 1;
+  const ratio = dist(t, i) / size;
+  // hysteresis so the pinch does not flicker
+  if (pinchState[idx]) { if (ratio > 0.5) pinchState[idx] = false; }
+  else if (ratio < 0.3) pinchState[idx] = true;
+  return { pinching: pinchState[idx], x: (t.x + i.x) / 2, y: (t.y + i.y) / 2 };
+}
+
+function fmt(s) { const m = Math.floor(s / 60), r = Math.floor(s % 60); return m + ':' + String(r).padStart(2, '0'); }
+
+function shuffle() {
+  let a;
+  do {
+    a = [...Array(N * N).keys()];
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  } while (a.every((v, i) => v === i));
+  return a;
+}
+
+function cellAt(x, y) {
+  if (!grid || x < grid.x || y < grid.y || x >= grid.x + grid.w || y >= grid.y + grid.h) return -1;
+  const c = Math.floor((x - grid.x) / (grid.w / N)), r = Math.floor((y - grid.y) / (grid.h / N));
+  return r * N + c;
+}
+
+function drawTile(val, x, y, w, h) {
+  const sw = grid.w / N, sh = grid.h / N;
+  ctx.drawImage(snap, (val % N) * sw, Math.floor(val / N) * sh, sw, sh, x, y, w, h);
+}
+
+function drawHand(lm) {
+  ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (const [a, b] of BONES) { const p = pt(lm, a), q = pt(lm, b); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); }
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 21; i++) { const p = pt(lm, i); ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, 7); ctx.fill(); }
+}
+
+function label(text, x, y) {
+  ctx.font = '700 15px JetBrains Mono, monospace'; ctx.fillStyle = LIME; ctx.textBaseline = 'bottom';
+  ctx.fillText(text, x, y);
+}
+
+// ---------- per frame ----------
+function onResults(res) {
+  $('msg').style.display = 'none';
+
+  // mirrored camera frame
+  vctx.save(); vctx.translate(W, 0); vctx.scale(-1, 1); vctx.drawImage(res.image, 0, 0, W, H); vctx.restore();
+  ctx.drawImage(vcan, 0, 0);
+
+  const hands = res.multiHandLandmarks || [];
+  const infos = hands.map((lm, i) => pinchInfo(lm, i));
+  for (let i = hands.length; i < 2; i++) pinchState[i] = false;
+
+  if (phase === 'capture') captureStep(hands, infos);
+  else if (phase === 'play') playStep(hands, infos);
+  else drawPuzzle();
+
+  hands.forEach(drawHand);
+  $('status').textContent = hands.length + (hands.length === 1 ? ' hand' : ' hands') + ' detected';
+}
+
+function captureStep(hands, infos) {
+  if (hands.length < 2) { capHold = 0; label('SHOW BOTH HANDS', 30, H - 24); return; }
+  const a = infos[0], b = infos[1];
+  const r = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) };
+  const ok = r.w > 240 && r.h > 160;
+
+  ctx.strokeStyle = ok ? LIME : '#ff5d5d'; ctx.lineWidth = 3;
+  ctx.strokeRect(r.x, r.y, r.w, r.h);
+  label(!ok ? 'MAKE THE FRAME BIGGER' : (a.pinching && b.pinching ? 'HOLD...' : 'PINCH TO CAPTURE'), r.x, r.y - 6);
+
+  if (ok && a.pinching && b.pinching) {
+    capHold++;
+    ctx.fillStyle = 'rgba(198,255,46,' + Math.min(0.35, capHold / 20) + ')';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    if (capHold >= 6) startPuzzle(r);
+  } else capHold = 0;
+}
+
+function startPuzzle(r) {
+  grid = { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w / N) * N, h: Math.round(r.h / N) * N };
+  snap = document.createElement('canvas'); snap.width = grid.w; snap.height = grid.h;
+  snap.getContext('2d').drawImage(vcan, grid.x, grid.y, grid.w, grid.h, 0, 0, grid.w, grid.h);
+  tiles = shuffle(); drag = null; capHold = 0;
+  phase = 'play'; startTime = performance.now(); elapsed = 0;
+  setHint('play'); $('timer').style.display = 'block';
+}
+
+function playStep(hands, infos) {
+  elapsed = (performance.now() - startTime) / 1000;
+  $('timer').textContent = '\u23F1 ' + fmt(elapsed);
+
+  // use the first hand that is pinching, otherwise the first hand
+  const h = infos.find(i => i.pinching) || infos[0];
+  if (h) {
+    lostFrames = 0;
+    ptr.x += (h.x - ptr.x) * 0.5; ptr.y += (h.y - ptr.y) * 0.5;   // light smoothing
+    if (!drag && h.pinching) {
+      const c = cellAt(ptr.x, ptr.y);
+      if (c >= 0) drag = { pos: c, val: tiles[c] };
+    } else if (drag && !h.pinching) {
+      const c = cellAt(ptr.x, ptr.y);
+      if (c >= 0 && c !== drag.pos) [tiles[c], tiles[drag.pos]] = [tiles[drag.pos], tiles[c]];
+      drag = null;
+      if (tiles.every((v, i) => v === i)) return finish();
+    }
+  } else if (++lostFrames > 12) drag = null;
+
+  drawPuzzle(h ? cellAt(ptr.x, ptr.y) : -1);
+}
+
+function drawPuzzle(hover = -1) {
+  if (!grid) return;
+  const tw = grid.w / N, th = grid.h / N;
+  ctx.fillStyle = '#0a0a10'; ctx.fillRect(grid.x, grid.y, grid.w, grid.h);
+  for (let p = 0; p < N * N; p++) {
+    if (drag && p === drag.pos) continue;              // leave a hole where the held tile came from
+    drawTile(tiles[p], grid.x + (p % N) * tw, grid.y + Math.floor(p / N) * th, tw, th);
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.5;
+  for (let i = 0; i <= N; i++) {
+    ctx.beginPath(); ctx.moveTo(grid.x + i * tw, grid.y); ctx.lineTo(grid.x + i * tw, grid.y + grid.h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(grid.x, grid.y + i * th); ctx.lineTo(grid.x + grid.w, grid.y + i * th); ctx.stroke();
+  }
+  if (hover >= 0 && !drag) {
+    ctx.strokeStyle = LIME; ctx.lineWidth = 2;
+    ctx.strokeRect(grid.x + (hover % N) * tw, grid.y + Math.floor(hover / N) * th, tw, th);
+  }
+  if (drag) {
+    const x = ptr.x - tw / 2, y = ptr.y - th / 2;
+    drawTile(drag.val, x, y, tw, th);
+    ctx.strokeStyle = LIME; ctx.lineWidth = 3; ctx.strokeRect(x, y, tw, th);
+    ctx.fillStyle = LIME; ctx.beginPath(); ctx.arc(ptr.x, ptr.y, 6, 0, 7); ctx.fill();
+  }
+}
+
+// ---------- finish, leaderboard, reset ----------
+function finish() {
+  phase = 'done'; drag = null;
+  $('doneTime').textContent = '\u23F1 ' + fmt(elapsed);
+  $('done').style.display = 'flex'; $('nameIn').focus();
+  drawPuzzle();
+}
+
+const key = () => 'livepuzzle_' + N;
+const loadScores = () => { try { return JSON.parse(localStorage.getItem(key()) || '[]'); } catch { return []; } };
+function saveScore(name, t) {
+  const s = loadScores(); s.push({ name, t }); s.sort((a, b) => a.t - b.t);
+  try { localStorage.setItem(key(), JSON.stringify(s.slice(0, 10))); } catch {}
+}
+function renderLb() {
+  $('lbTitle').textContent = 'LEADERBOARD ' + N + 'x' + N;
+  const s = loadScores();
+  $('lbList').innerHTML = s.length
+    ? s.map(e => `<li>${e.name.replace(/[<>&]/g, '')}<span>${fmt(e.t)}</span></li>`).join('')
+    : '<li style="list-style:none;color:#8d8d99">No times yet</li>';
+}
+function reset() {
+  phase = 'capture'; snap = grid = null; drag = null; capHold = 0;
+  $('done').style.display = 'none'; $('timer').style.display = 'none';
+  setHint('capture');
+}
+
+$('nameForm').onsubmit = e => {
+  e.preventDefault();
+  saveScore(($('nameIn').value.trim() || 'ANON').toUpperCase(), elapsed);
+  $('nameIn').value = ''; reset(); renderLb(); $('lb').style.display = 'flex';
+};
+$('lbBtn').onclick = () => { renderLb(); $('lb').style.display = 'flex'; };
+$('lb').querySelector('.close').onclick = () => $('lb').style.display = 'none';
+$('resetBtn').onclick = reset;
+
+// ---------- boot ----------
+async function boot() {
+  buildSizes();
+  setHint('capture');
+  setHint('capture');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, facingMode: 'user' }, audio: false });
+    cam.srcObject = stream; await cam.play();
+  } catch (e) {
+    $('msg').textContent = 'Camera blocked. Allow camera access and serve this page from localhost or https.'; return;
+  }
+  const hands = new Hands({ locateFile: f => 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/' + f });
+  hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
+  hands.onResults(onResults);
+  const loop = async () => {
+    if (cam.readyState >= 2) { try { await hands.send({ image: cam }); } catch (e) { console.error(e); } }
+    requestAnimationFrame(loop);
+  };
+  loop();
+}
+boot();
+</script>
+</body>
+</html>
