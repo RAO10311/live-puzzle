@@ -2,6 +2,10 @@
 
 A responsive sliding-number puzzle game built with HTML, CSS and vanilla JavaScript.
 
+## 🚀 Live Demo
+
+[Play Live Puzzle](https://rao10311.github.io/live-puzzle/)
+
 ## How to play
 1. Choose a 3 × 3, 4 × 4 or 5 × 5 board.
 2. Select a numbered tile next to the empty space to slide it.
@@ -23,5 +27,3 @@ Open `index.html` in a browser.
 - `index.html` — page structure
 - `style.css` — visual design
 - `script.js` — puzzle logic
-
-The live demo link will be added after GitHub Pages is configured and tested.
