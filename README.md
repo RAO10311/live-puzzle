@@ -1,18 +1,27 @@
 # Live Puzzle
 
-A browser-based hand-tracking puzzle game. Raise both hands to frame a picture, pinch to capture it, then solve the shuffled tiles by pinching and dragging.
+A responsive sliding-number puzzle game built with HTML, CSS and vanilla JavaScript.
+
+## How to play
+1. Choose a 3 × 3, 4 × 4 or 5 × 5 board.
+2. Select a numbered tile next to the empty space to slide it.
+3. Arrange the numbers in ascending order, leaving the empty space at the end.
+4. Track your moves and solve time.
 
 ## Features
-- Hand tracking with MediaPipe Hands
-- 3x3, 4x4, and 6x6 puzzle grids
-- Timer and local leaderboard
-- Runs in the browser; camera frames are processed locally
+- Three difficulty levels
+- Randomized, solvable boards
+- Move counter and game timer
+- New game and reset controls
+- Responsive desktop and mobile layout
+- No framework or build step required
 
-## Credits
-Original project created by **Kashish995**. This copy is published in the `RAO10311/live-puzzle` repository with the creator's permission. The original implementation is retained.
+## Run locally
+Open `index.html` in a browser.
 
-- Original repository: https://github.com/Kashish995/live-puzzle
-- Original demo: https://kashish995.github.io/live-puzzle/
+## Project files
+- `index.html` — page structure
+- `style.css` — visual design
+- `script.js` — puzzle logic
 
-## Run
-Open the GitHub Pages site over HTTPS, allow camera access, and follow the on-screen instructions.
+The live demo link will be added after GitHub Pages is configured and tested.
